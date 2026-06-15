@@ -1,0 +1,39 @@
+# Edit these paths to match your local DCASE2026 Task 2 directory.
+# Expected split layout per machine:
+#   <machine>/train/*.wav
+#   <machine>/test/*.wav
+#
+# Development split is used for development-set score checks.
+# Evaluation split is used for final eval score generation.
+
+dcase2026_train_dirs:
+  - data/dcase2026_task2/dev/ToyCar/train
+  - data/dcase2026_task2/dev/ToyCarEmu/train
+  - data/dcase2026_task2/dev/bearingEmu/train
+  - data/dcase2026_task2/dev/fan/train
+  - data/dcase2026_task2/dev/gearboxEmu/train
+  - data/dcase2026_task2/dev/sliderEmu/train
+  - data/dcase2026_task2/dev/valveEmu/train
+
+dcase2026_valid_dirs:
+  - data/dcase2026_task2/dev/ToyCar/test
+  - data/dcase2026_task2/dev/ToyCarEmu/test
+  - data/dcase2026_task2/dev/bearingEmu/test
+  - data/dcase2026_task2/dev/fan/test
+  - data/dcase2026_task2/dev/gearboxEmu/test
+  - data/dcase2026_task2/dev/sliderEmu/test
+  - data/dcase2026_task2/dev/valveEmu/test
+
+dcase2026_eval_train_dirs:
+  - data/dcase2026_task2/eval/BlowerDustCollector/train
+  - data/dcase2026_task2/eval/Sander/train
+  - data/dcase2026_task2/eval/SewingMachine/train
+  - data/dcase2026_task2/eval/ToothBrush/train
+  - data/dcase2026_task2/eval/ToyDrone/train
+
+dcase2026_eval_dirs:
+  - data/dcase2026_task2/eval/BlowerDustCollector/test
+  - data/dcase2026_task2/eval/Sander/test
+  - data/dcase2026_task2/eval/SewingMachine/test
+  - data/dcase2026_task2/eval/ToothBrush/test
+  - data/dcase2026_task2/eval/ToyDrone/test

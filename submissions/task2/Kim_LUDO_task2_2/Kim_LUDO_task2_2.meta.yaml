@@ -1,0 +1,114 @@
+# Submission information
+submission:
+  label: Kim_LUDO_task2_2
+  name: Residual View with PRPS ensemble
+  abbreviation: RVPRPS-En
+  authors:
+    - firstname: JeongSik
+      lastname: Kim
+      email: jskim@ludo-lab.com
+      corresponding: true
+      affiliation:
+        institution: LUDO Lab cooperation
+        department: Fundamental Deep Learning Research Group
+        location: Busan, South Korea
+
+    - firstname: JongWoo
+      lastname: Sung
+      email: uturtle@ludo-lab.com
+      affiliation:
+        institution: LUDO Lab cooperation
+        location: Busan, South Korea
+
+    - firstname: Siyoon
+      lastname: Kim
+      email: sykim@ludo-lab.com
+      affiliation:
+        institution: LUDO Lab cooperation
+        location: Busan, South Korea
+
+    - firstname: HyeonJun
+      lastname: Bae
+      email: gull@ludo-lab.com
+      affiliation:
+        institution: LUDO Lab cooperation
+        location: Busan, South Korea
+
+    - firstname: BoRyeon
+      lastname: Kim
+      email: boryeon@ludo-lab.com
+      affiliation:
+        institution: LUDO Lab cooperation
+        location: Busan, South Korea
+
+    - firstname: JiAn
+      lastname: Lee
+      email: jianee@ludo-lab.com
+      affiliation:
+        institution: LUDO Lab cooperation
+        location: Busan, South Korea
+
+# System information
+system:
+  description:
+    input_sampling_rate: 16kHz
+    data_augmentation: MemMixup
+    front_end: !!null
+    acoustic_features: log-mel energies
+    embeddings: BEATs iter3, DaSheng-base, SSLAM
+    machine_learning_method: kNN, residual memory bank, PRPS score fusion
+    aggregation_method: raw mean of full residual MemMix score and PRPS-selected residual prototype score
+    domain_adaptation_method: !!null
+    domain_generalization_method: residual view, projection-residual prototype selection
+    ensemble_method_subsystem_count: 3
+    decision_making: train-normal 95 percentile threshold
+    attribute_usage: !!null
+    external_data_usage: pre-trained model
+    development_data_usage: development
+
+  complexity:
+    total_parameters: 265732336
+
+  external_datasets:
+    - name: !!null
+      url: !!null
+
+  source_code: !!null
+
+# System results
+results:
+  development_dataset:
+    ToyCar:
+      auc_source: 79.56
+      auc_target: 85.30
+      pauc: 59.47
+
+    ToyCarEmu:
+      auc_source: 62.40
+      auc_target: 80.60
+      pauc: 50.00
+
+    bearingEmu:
+      auc_source: 66.80
+      auc_target: 60.78
+      pauc: 60.53
+
+    fan:
+      auc_source: 58.04
+      auc_target: 45.40
+      pauc: 52.89
+
+    gearboxEmu:
+      auc_source: 74.72
+      auc_target: 54.94
+      pauc: 52.95
+
+    sliderEmu:
+      auc_source: 80.68
+      auc_target: 65.50
+      pauc: 55.05
+
+    valveEmu:
+      auc_source: 74.80
+      auc_target: 78.08
+      pauc: 56.74
