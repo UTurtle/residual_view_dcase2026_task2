@@ -1,8 +1,11 @@
 import pickle
 import os
+import subprocess
+import sys
 import numpy as np
 import pandas as pd
 import time
+from pathlib import Path
 from tqdm import tqdm
 from scipy.stats import hmean
 from src.datasets.prepare_dcase2026 import get_dcase2026
@@ -22,8 +25,117 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve
 
 import argparse
+import yaml
 
-parser = argparse.ArgumentParser()
+
+ROOT = Path(__file__).resolve().parent
+PIPELINE_CHILD_ENV = "RESIDUAL_VIEW_PIPELINE_CHILD"
+
+
+def load_yaml_config(path):
+    if path is None:
+        return {}
+    with open(path, "r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+    if not isinstance(config, dict):
+        raise ValueError(f"Config must be a YAML mapping: {path}")
+    residual_config = config.get("residual_view", {})
+    if residual_config is not None and not isinstance(residual_config, dict):
+        raise ValueError("residual_view must be a YAML mapping.")
+    merged = dict(config)
+    merged.update(residual_config or {})
+    if "fixed_residual_alpha" not in merged and "residual_alpha" in merged:
+        merged["fixed_residual_alpha"] = merged["residual_alpha"]
+    if "alpha" not in merged and "memmix_alpha" in merged:
+        merged["alpha"] = merged["memmix_alpha"]
+    return merged
+
+
+def add_config_defaults(parser, config):
+    valid_keys = {
+        action.dest
+        for action in parser._actions
+        if action.dest != argparse.SUPPRESS
+    }
+    defaults = {
+        key: value
+        for key, value in config.items()
+        if key in valid_keys
+    }
+    parser.set_defaults(**defaults)
+
+
+def cache_models_from_config(config):
+    cache_models = config.get("cache_models")
+    if cache_models is None:
+        return []
+    if not isinstance(cache_models, list) or not cache_models:
+        raise ValueError("cache_models must be a non-empty list.")
+
+    parsed = []
+    for index, item in enumerate(cache_models):
+        if not isinstance(item, dict):
+            raise ValueError(f"cache_models[{index}] must be a mapping.")
+        parsed.append(
+            {
+                "model_name": str(item["model_name"]),
+                "pretrained_model_dir": str(item["pretrained_model_dir"]),
+            }
+        )
+    return parsed
+
+
+def run_pipeline_from_config(config_path, config):
+    config_path = str(Path(config_path).resolve())
+    env = dict(os.environ)
+    env[PIPELINE_CHILD_ENV] = "1"
+
+    for model in cache_models_from_config(config):
+        subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve()),
+                "--config",
+                config_path,
+                "--model_name",
+                model["model_name"],
+                "--pretrained_model_dir",
+                model["pretrained_model_dir"],
+            ],
+            cwd=ROOT,
+            env=env,
+            check=True,
+        )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "run_projection_select.py",
+            "--config",
+            config_path,
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+config_parser = argparse.ArgumentParser(add_help=False)
+config_parser.add_argument("--config", type=str, default=None)
+config_args, remaining_argv = config_parser.parse_known_args()
+config_defaults = load_yaml_config(config_args.config)
+
+if (
+    config_args.config is not None
+    and os.environ.get(PIPELINE_CHILD_ENV) != "1"
+    and "--model_name" not in remaining_argv
+    and "-h" not in remaining_argv
+    and "--help" not in remaining_argv
+    and cache_models_from_config(config_defaults)
+):
+    run_pipeline_from_config(config_args.config, config_defaults)
+    sys.exit(0)
+
+parser = argparse.ArgumentParser(parents=[config_parser])
 parser.add_argument('--model_name', type=str, default="beats", help='ast or beats')
 parser.add_argument('--train_pct', type=float, default=1, help='path to save results')
 parser.add_argument('--pretrained_model_dir', type=str, default="./transformer-ssl-asd/beats", help='path to saved models')
@@ -72,6 +184,7 @@ parser.add_argument('--wandb_name', type=str, default=None)
 parser.add_argument('--use_wandb', action="store_true", default=False)
 parser.add_argument('--no_wandb', action="store_true", default=False)
 
+add_config_defaults(parser, config_defaults)
 args = parser.parse_args()
 model_name = args.model_name
 pt_model_dir = args.pretrained_model_dir
@@ -134,6 +247,7 @@ fixed_residual_condition = (
     f'_fixedresidualalpha{fixed_residual_alpha}'
     if fixed_residual_alpha is not None else ''
 )
+crop_condition = ""
 log_condition = f'DNASD_model_name{model_name}_input{input_type}{view_condition}{fixed_residual_condition}_topk{top_k}_trainsplit{train_split}_evalsplit{eval_split}_pooling{pooling_feature}_n_mix_support{n_mix_support}_alpha{alpha}'
 save_dir = f"out/{dataset_name}_test/patch_diff_{model_name}/{log_condition}/log_{time.strftime('%Y%m%d-%H%M%S')}"
 os.makedirs(save_dir, exist_ok=True)

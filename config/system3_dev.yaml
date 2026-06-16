@@ -1,0 +1,33 @@
+dataset_name: dcase2026
+train_split: train
+eval_split: valid
+
+input_type: near
+different_view: fixed_residual_view
+fixed_residual_alpha: 0.5
+residual_alpha: 0.5
+top_k: 1
+temporal_pooling: true
+n_mix_support: 990
+alpha: 0.9
+memmix_alpha: 0.9
+no_wandb: true
+
+cache_models:
+  - model_name: sslam
+    pretrained_model_dir: ./transformer-ssl-asd/sslam
+
+cache_root_template: cache_memory/train_features_{model_name}_inputnear_differentview_pair
+
+score_dir: out/task2_dev_scores/system3
+score_csv: out/task2_dev_scores_system3.csv
+
+systems:
+  - system_id: system3_dev
+    label: Kim_LUDO_task2_3
+    mode: residual
+    encoders:
+      - slug: sslam_l12
+        display: SSLAM L12
+        model_name: sslam
+        layer: 12

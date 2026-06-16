@@ -1,0 +1,39 @@
+dataset_name: dcase2026
+train_split: eval_train
+eval_split: eval
+
+input_type: near
+different_view: fixed_residual_view
+fixed_residual_alpha: 0.5
+residual_alpha: 0.5
+top_k: 1
+temporal_pooling: true
+n_mix_support: 990
+alpha: 0.9
+memmix_alpha: 0.9
+no_wandb: true
+
+cache_models:
+  - model_name: sslam
+    pretrained_model_dir: ./transformer-ssl-asd/sslam
+
+cache_root_template: cache_memory/train_features_{model_name}_inputnear_differentview_pair
+
+score_dir: out/task2_eval_scores/system1
+write_submission: true
+submission_dir: out/task2_submissions/system1_eval
+decision_q: 0.95
+
+prps_k: 128
+projection_dim: 256
+projection_seed: 20260614
+
+systems:
+  - system_id: system1_eval
+    label: Kim_LUDO_task2_1
+    mode: prps
+    encoders:
+      - slug: sslam_l12
+        display: SSLAM L12
+        model_name: sslam
+        layer: 12

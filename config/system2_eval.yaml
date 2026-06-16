@@ -1,0 +1,59 @@
+dataset_name: dcase2026
+train_split: eval_train
+eval_split: eval
+
+input_type: near
+different_view: fixed_residual_view
+fixed_residual_alpha: 0.5
+residual_alpha: 0.5
+top_k: 1
+temporal_pooling: true
+n_mix_support: 990
+alpha: 0.9
+memmix_alpha: 0.9
+no_wandb: true
+
+cache_models:
+  - model_name: beats_iter3
+    pretrained_model_dir: ./transformer-ssl-asd/beats
+  - model_name: dasheng_base
+    pretrained_model_dir: .
+  - model_name: sslam
+    pretrained_model_dir: ./transformer-ssl-asd/sslam
+
+cache_root_template: cache_memory/train_features_{model_name}_inputnear_differentview_pair
+
+score_dir: out/task2_eval_scores/system2
+write_submission: true
+submission_dir: out/task2_submissions/system2_eval
+decision_q: 0.95
+
+prps_k: 128
+projection_dim: 256
+projection_seed: 20260614
+
+systems:
+  - system_id: system2_eval
+    label: Kim_LUDO_task2_2
+    mode: prps
+    encoders:
+      - slug: beats_iter3_l6
+        display: BEATs iter3 L6
+        model_name: beats_iter3
+        layer: 6
+      - slug: beats_iter3_l12
+        display: BEATs iter3 L12
+        model_name: beats_iter3
+        layer: 12
+      - slug: dasheng_base
+        display: DaSheng-base
+        model_name: dasheng_base
+        layer: 1
+      - slug: sslam_l6
+        display: SSLAM L6
+        model_name: sslam
+        layer: 6
+      - slug: sslam_l12
+        display: SSLAM L12
+        model_name: sslam
+        layer: 12
