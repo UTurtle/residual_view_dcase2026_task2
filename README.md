@@ -2,9 +2,8 @@
 
 Minimal reproduction code for the DCASE2026 Task 2 submitted systems.
 
-Paper link will be added later. This repository keeps only the runnable code,
-submission-format examples, and the main settings used for the reported
-development-set scores.
+Paper link will be added later. This repository keeps only the runnable code
+and the main settings used for the reported development-set scores.
 
 ## Setup
 
@@ -51,12 +50,6 @@ python scripts/build_task2_final_from_pair_cache.py \
   --output_dir out/task2_reproduced
 ```
 
-Validate the checked-in submission-format example:
-
-```bash
-bash submissions/task2/scripts/validate_submission_package.sh
-```
-
 Validate a reproduced package:
 
 ```bash
@@ -66,8 +59,8 @@ python submissions/task2/scripts/validate_submission_package.py \
 ```
 
 The pair-cache builder reproduces the PRPS systems, `Kim_LUDO_task2_1` and
-`Kim_LUDO_task2_2`. The checked-in `Kim_LUDO_task2_3` folder is the residual-only
-SSLAM anchor system.
+`Kim_LUDO_task2_2`. The residual-only SSLAM anchor system, `Kim_LUDO_task2_3`,
+is reported as the conservative comparison system.
 
 ## Submitted Systems
 
