@@ -7,7 +7,6 @@ from tqdm import tqdm
 from scipy.stats import hmean
 from src.datasets.prepare_dcase2026 import get_dcase2026
 from src.datasets.audio_dataset import AudioDataset
-from src.datasets.clip_sampling import TRANSITION_CROP_POLICIES
 from src.encoders import build_feature_extractor
 from src.aggression.local_density import apply_local_density
 from src.residual_view.input_type import INPUT_TYPE_NAMES, expand_input_type
@@ -52,13 +51,6 @@ parser.add_argument('--alpha', type=float, default=0.90, help='Alpha value for m
 parser.add_argument('--save_official', action="store_true", default=False, help='Save official submission files')
 parser.add_argument('--channel_index', type=int, default=0, help='0=near, 1=far')
 parser.add_argument(
-    '--crop_policy',
-    type=str,
-    default='fixed10s',
-    choices=sorted(TRANSITION_CROP_POLICIES),
-    help='10s crop policy for non-window AudioDataset runs.',
-)
-parser.add_argument(
     '--machine_names',
     type=str,
     default='all',
@@ -69,14 +61,14 @@ parser.add_argument(
     type=str,
     default=None,
     choices=sorted(INPUT_TYPE_NAMES),
-    help='Raw input ablation type. If omitted, channel_index is used.',
+    help='Input channel. If omitted, channel_index is used.',
 )
 parser.add_argument(
     '--different_view',
     type=str,
     default=None,
     choices=sorted(DIFFERENT_VIEW_NAMES),
-    help='Embedding-space near/far view ablation.',
+    help='Embedding-space near/far view.',
 )
 parser.add_argument(
     '--fixed_residual_alpha',
@@ -107,7 +99,7 @@ if args.input_type is None:
     else:
         raise ValueError(
             f"Unsupported channel_index={channel_index}. "
-            "Use --input_type for raw input ablations."
+            "Use --input_type to select near or far input."
         )
 else:
     input_type = args.input_type
@@ -130,7 +122,7 @@ save_official = args.save_official
 local_density = args.local_density
 ld_k = args.ld_k
 ld_ref_mode = args.ld_ref_mode
-crop_policy = args.crop_policy
+crop_policy = "fixed10s"
 selected_machine_names = [
     machine_name.strip()
     for machine_name in args.machine_names.split(',')
