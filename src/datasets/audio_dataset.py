@@ -23,16 +23,12 @@ class AudioDataset(Dataset):
             domain=None,
             channel_index=None,
             input_types=None,
-            crop_policy="fixed10s",
         ):
         self.machine_name = machine_name
         self.extracted_features = None
         self.domain = domain
         self.channel_index = channel_index
         self.input_types = input_types
-        if crop_policy != "fixed10s":
-            raise ValueError("This reproduction package supports only fixed10s cropping.")
-        self.crop_policy = crop_policy
         # Filter by machine name
         if self.machine_name is not None:
             self.file_list = [file for file, machine in zip(file_list, machine_list) if machine == self.machine_name]

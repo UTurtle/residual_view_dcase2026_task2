@@ -109,7 +109,6 @@ audio_length = args.audio_length
 n_mix_support = args.n_mix_support
 alpha = args.alpha
 save_official = args.save_official
-crop_policy = "fixed10s"
 selected_machine_names = [
     machine_name.strip()
     for machine_name in args.machine_names.split(',')
@@ -262,7 +261,6 @@ for class_name in machine_names:
         audio_length=audio_length,
         channel_index=args.channel_index,
         input_types=dataset_train_input_types,
-        crop_policy=crop_policy,
     )
     test_dataset = AudioDataset(
         file_list=test_data["file_list"], 
@@ -273,7 +271,6 @@ for class_name in machine_names:
         audio_length=audio_length,
         channel_index=args.channel_index,
         input_types=dataset_eval_input_types,
-        crop_policy=crop_policy,
     )
     train_class_ids_machine = train_file_attrs[train_machine_names == class_name]
     all_attrs = np.concatenate([train_class_ids_machine]) 
