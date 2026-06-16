@@ -8,7 +8,6 @@ from scipy.stats import hmean
 from src.datasets.prepare_dcase2026 import get_dcase2026
 from src.datasets.audio_dataset import AudioDataset
 from src.encoders import build_feature_extractor
-from src.aggression.local_density import apply_local_density
 from src.residual_view.input_type import INPUT_TYPE_NAMES, expand_input_type
 from src.residual_view.differet_view import (
     DIFFERENT_VIEW_NAMES,
@@ -32,15 +31,6 @@ parser.add_argument('--dataset_name', type=str, default='dcase2026')
 parser.add_argument('--eval_split', type=str, default="valid", help='Include valid set')
 parser.add_argument('--train_split', type=str, default="train", help='train')
 parser.add_argument('--top_k', type=int, default=1, help='Top k')
-parser.add_argument('--local_density', action='store_true', default=False, help='Use System 2 Local Density scoring')
-parser.add_argument('--ld_k', type=int, default=16, help='K for Local Density scoring')
-parser.add_argument(
-    '--ld_ref_mode',
-    type=str,
-    default='combined',
-    choices=['combined', 'source_combined'],
-    help='Reference banks for Local Density scoring',
-)
 parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
 parser.add_argument('--temporal_pooling', action="store_true", default=False, help='Temporal pooling or not')
 parser.add_argument('--spectral_pooling', action="store_true", default=False, help='Spectral pooling or not')
@@ -119,9 +109,6 @@ audio_length = args.audio_length
 n_mix_support = args.n_mix_support
 alpha = args.alpha
 save_official = args.save_official
-local_density = args.local_density
-ld_k = args.ld_k
-ld_ref_mode = args.ld_ref_mode
 crop_policy = "fixed10s"
 selected_machine_names = [
     machine_name.strip()
@@ -148,8 +135,7 @@ fixed_residual_condition = (
     f'_fixedresidualalpha{fixed_residual_alpha}'
     if fixed_residual_alpha is not None else ''
 )
-crop_condition = f'_croppolicy{crop_policy}' if crop_policy != 'fixed10s' else ''
-log_condition = f'DNASD_model_name{model_name}_input{input_type}{view_condition}{fixed_residual_condition}{crop_condition}_topk{top_k}_ld{local_density}_ldk{ld_k}_ldref{ld_ref_mode}_trainsplit{train_split}_evalsplit{eval_split}_pooling{pooling_feature}_n_mix_support{n_mix_support}_alpha{alpha}'
+log_condition = f'DNASD_model_name{model_name}_input{input_type}{view_condition}{fixed_residual_condition}_topk{top_k}_trainsplit{train_split}_evalsplit{eval_split}_pooling{pooling_feature}_n_mix_support{n_mix_support}_alpha{alpha}'
 save_dir = f"out/{dataset_name}_test/patch_diff_{model_name}/{log_condition}/log_{time.strftime('%Y%m%d-%H%M%S')}"
 os.makedirs(save_dir, exist_ok=True)
 
@@ -165,17 +151,12 @@ if wandb_enabled:
         dir=save_dir,
     )
     wandb_run.summary['score_selection'] = 'raw_final_best_layer_wise'
-    wandb_run.summary['score_mode'] = 'raw_no_eval_zscore'
-    wandb_run.summary['eval_zscore'] = 'diagnostic_only'
+    wandb_run.summary['score_mode'] = 'raw_knn_distance'
     wandb_run.summary['dev_selective_best_each_machine'] = 'diagnostic_only'
-    wandb_run.summary['local_density'] = local_density
-    wandb_run.summary['ld_k'] = ld_k
-    wandb_run.summary['ld_ref_mode'] = ld_ref_mode
     wandb_run.summary['input_type'] = input_type
     wandb_run.summary['machine_names'] = args.machine_names
     wandb_run.summary['different_view'] = different_view
     wandb_run.summary['fixed_residual_alpha'] = fixed_residual_alpha
-    wandb_run.summary['crop_policy'] = crop_policy
 
 if dataset_name == "dcase2026":
     datasets = get_dcase2026(train_split)
@@ -240,7 +221,6 @@ model.to(device)
 model.eval()
 
 df_log = pd.DataFrame()
-df_log_wo_norm = pd.DataFrame()
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -270,7 +250,6 @@ print(f'different_view: {different_view}')
 print(f'train input types: {train_input_types}')
 print(f'eval input types: {eval_input_types}')
 print(f'historical_mono: {historical_mono}')
-print(f'crop_policy: {crop_policy}')
 
 for class_name in machine_names:
 
@@ -496,182 +475,44 @@ for class_name in machine_names:
             torch.flatten(test_all_lasts, 1),
             train_ref_features,
         )
-        if local_density:
-            print(f"apply Local Density scoring: k={ld_k}, ref_mode={ld_ref_mode}")
-            if ld_ref_mode == 'source_combined':
-                source_ref_features = train_ref_features[current_source_indices]
-                source_dist = dist_matrix[:, current_source_indices]
-                source_dist, _ = apply_local_density(
-                    source_dist,
-                    source_ref_features,
-                    calc_dist_matrix,
-                    k=ld_k,
-                )
-                combined_dist, _ = apply_local_density(
-                    dist_matrix,
-                    train_ref_features,
-                    calc_dist_matrix,
-                    k=ld_k,
-                )
-                print(f"source_ref_dist.size(): {source_dist.size()}")
-                print(f"combined_ref_dist.size(): {combined_dist.size()}")
+        source_dist = dist_matrix[:, current_source_indices]
+        target_dist = dist_matrix[:, current_target_indices]
+        print(f"source_dist.size(): {source_dist.size()}")
+        print(f"target_dist.size(): {target_dist.size()}")
 
-                topk_value_source, topk_index_source = torch.topk(
-                    source_dist,
-                    k=top_k,
-                    dim=1,
-                    largest=False,
-                )
-                topk_index_source = current_source_indices[topk_index_source]
-                topk_value_combined, topk_index_combined = torch.topk(
-                    combined_dist,
-                    k=top_k,
-                    dim=1,
-                    largest=False,
-                )
-                value_source = torch.mean(
-                    topk_value_source, 1
-                ).cpu().detach().numpy()
-                value_combined = torch.mean(
-                    topk_value_combined, 1
-                ).cpu().detach().numpy()
+        topk_value_source, topk_index_source = torch.topk(
+            source_dist,
+            k=top_k,
+            dim=1,
+            largest=False,
+        )
+        topk_value_target, topk_index_target = torch.topk(
+            target_dist,
+            k=top_k,
+            dim=1,
+            largest=False,
+        )
+        topk_index_source = current_source_indices[topk_index_source]
+        topk_index_target = current_target_indices[topk_index_target]
 
-                source_mean = np.mean(value_source)
-                source_std = np.std(value_source)
-                combined_mean = np.mean(value_combined)
-                combined_std = np.std(value_combined)
-                standardized_source_scores = (
-                    value_source - source_mean
-                ) / (source_std + np.finfo(float).eps)
-                standardized_combined_scores = (
-                    value_combined - combined_mean
-                ) / (combined_std + np.finfo(float).eps)
+        topk_indexes = torch.cat(
+            [topk_index_source, topk_index_target],
+            1,
+        ).cpu()
+        value_source = torch.mean(topk_value_source, 1).cpu().detach().numpy()
+        value_target = torch.mean(topk_value_target, 1).cpu().detach().numpy()
 
-                scores = np.minimum(
-                    standardized_source_scores,
-                    standardized_combined_scores,
-                )
-                min_indices = np.argmin(
-                    np.stack(
-                        (
-                            standardized_source_scores,
-                            standardized_combined_scores,
-                        ),
-                        axis=-1,
-                    ),
-                    axis=-1,
-                )
-                topk_indexes = torch.cat(
-                    [topk_index_source, topk_index_combined],
-                    1,
-                ).cpu()
-                topk_indexes_w_norm = topk_indexes[
-                    np.arange(topk_indexes.shape[0]),
-                    min_indices,
-                ]
-
-                scores_wo_norm = np.minimum(value_source, value_combined)
-                min_indices_wo_norm = np.argmin(
-                    np.stack((value_source, value_combined), axis=-1),
-                    axis=-1,
-                )
-                topk_indexes_wo_norm = topk_indexes[
-                    np.arange(topk_indexes.shape[0]),
-                    min_indices_wo_norm,
-                ]
-            else:
-                dist_matrix, _ = apply_local_density(
-                    dist_matrix,
-                    train_ref_features,
-                    calc_dist_matrix,
-                    k=ld_k,
-                )
-                print(f"ref_dist.size(): {dist_matrix.size()}")
-                topk_value_ref, topk_index_ref = torch.topk(
-                    dist_matrix,
-                    k=top_k,
-                    dim=1,
-                    largest=False,
-                )
-                value_ref = torch.mean(topk_value_ref, 1).cpu().detach().numpy()
-                ref_mean = np.mean(value_ref)
-                ref_std = np.std(value_ref)
-                scores = (value_ref - ref_mean) / (
-                    ref_std + np.finfo(float).eps
-                )
-                scores_wo_norm = value_ref
-                topk_indexes_w_norm = topk_index_ref[:, 0].cpu()
-                topk_indexes_wo_norm = topk_indexes_w_norm
-        else:
-            # create source and target memory banks
-            source_dist = dist_matrix[:, current_source_indices]
-            target_dist = dist_matrix[:, current_target_indices]
-            print(f"source_dist.size(): {source_dist.size()}")
-            print(f"target_dist.size(): {target_dist.size()}")
-
-            # implement soft scoring
-            topk_value_source, topk_index_source = torch.topk(
-                source_dist,
-                k=top_k,
-                dim=1,
-                largest=False,
-            )
-            topk_value_target, topk_index_target = torch.topk(
-                target_dist,
-                k=top_k,
-                dim=1,
-                largest=False,
-            )
-            topk_index_source = current_source_indices[topk_index_source]
-            topk_index_target = current_target_indices[topk_index_target]
-
-            topk_indexes = torch.cat(
-                [topk_index_source, topk_index_target],
-                1,
-            ).cpu()
-            value_source = torch.mean(topk_value_source, 1).cpu().detach().numpy()
-            value_target = torch.mean(topk_value_target, 1).cpu().detach().numpy()
-
-            # Standardize source and target scores
-            source_mean = np.mean(value_source)
-            source_std = np.std(value_source)
-            standardized_source_scores = (value_source - source_mean) / source_std
-            target_mean = np.mean(value_target)
-            target_std = np.std(value_target)
-            standardized_target_scores = (value_target - target_mean) / target_std
-
-            # with norm
-            # pick wheter the score from source or target
-            scores = np.minimum(
-                standardized_source_scores,
-                standardized_target_scores,
-            )
-            min_indices = np.argmin(
-                np.stack(
-                    (standardized_source_scores, standardized_target_scores),
-                    axis=-1,
-                ),
-                axis=-1,
-            )
-            # topk_indexes are concatenated; select the chosen domain index.
-            topk_indexes_w_norm = topk_indexes[
-                np.arange(topk_indexes.shape[0]),
-                min_indices,
-            ]
-
-            # without norm
-            scores_wo_norm = np.minimum(value_source, value_target)
-            min_indices_wo_norm = np.argmin(
-                np.stack((value_source, value_target), axis=-1),
-                axis=-1,
-            )
-            topk_indexes_wo_norm = topk_indexes[
-                np.arange(topk_indexes.shape[0]),
-                min_indices_wo_norm,
-            ]
+        scores = np.minimum(value_source, value_target)
+        min_indices = np.argmin(
+            np.stack((value_source, value_target), axis=-1),
+            axis=-1,
+        )
+        topk_indexes_raw = topk_indexes[
+            np.arange(topk_indexes.shape[0]),
+            min_indices,
+        ]
 
         if has_eval_labels:
-            # with norm
             # by including anomalous sample of different domain, we pick the same threshold
             score_source = scores[(source_list_machine == True) | (gt_list != 0)]
             score_target = scores[(source_list_machine == False) | (gt_list != 0)]
@@ -682,16 +523,6 @@ for class_name in machine_names:
 
             official_score = hmean([auc_source, auc_target, pauc_all])
 
-            # without norm
-            score_source_wo_norm = scores_wo_norm[(source_list_machine == True) | (gt_list != 0)]
-            score_target_wo_norm = scores_wo_norm[(source_list_machine == False) | (gt_list != 0)]
-
-            auc_all_wo_norm, pauc_all_wo_norm, f1_all_wo_norm = eval_score(gt_list, scores_wo_norm)
-            auc_source_wo_norm, pauc_source_wo_norm, f1_source_wo_norm = eval_score(gt_source, score_source_wo_norm)
-            auc_target_wo_norm, pauc_target_wo_norm, f1_target_wo_norm = eval_score(gt_target, score_target_wo_norm)
-
-            official_score_wo_norm = hmean([auc_source_wo_norm, auc_target_wo_norm, pauc_all_wo_norm])
-
             print('AUC: %.4f, PAUC: %.4f, F1: %.4f' % (auc_all, pauc_all, f1_all))
             print('AUC source: %.4f, PAUC source: %.4f, F1 source: %.4f' % (auc_source, pauc_source, f1_source))
             print('AUC target: %.4f, PAUC target: %.4f, F1 target: %.4f' % (auc_target, pauc_target, f1_target))
@@ -700,22 +531,15 @@ for class_name in machine_names:
             auc_source = pauc_source = f1_source = np.nan
             auc_target = pauc_target = f1_target = np.nan
             official_score = np.nan
-            auc_all_wo_norm = pauc_all_wo_norm = f1_all_wo_norm = np.nan
-            auc_source_wo_norm = pauc_source_wo_norm = f1_source_wo_norm = np.nan
-            auc_target_wo_norm = pauc_target_wo_norm = f1_target_wo_norm = np.nan
-            official_score_wo_norm = np.nan
 
         # ===== find the retrieval accuracy
-        # with norm
-        topk_indexes_source = topk_indexes_w_norm[source_list_machine]
-        topk_indexes_target = topk_indexes_w_norm[~source_list_machine]
+        topk_indexes_source = topk_indexes_raw[source_list_machine]
+        topk_indexes_target = topk_indexes_raw[~source_list_machine]
         source = 0
         
         if n_mix_support is not None:
             acc_source = 0
             acc_target = 0
-            acc_source_wo_norm = 0
-            acc_target_wo_norm = 0
         else:
             print(f'len topk indexes source: {len(topk_indexes_source)}')
             for id, ix in enumerate(topk_indexes_source):
@@ -737,28 +561,6 @@ for class_name in machine_names:
             acc_target = target / len(topk_indexes_target)
             print(f'retrieval acc source: {acc_source}, target: {acc_target}')
 
-            # without norm
-            topk_indexes_source_wo_norm = topk_indexes_wo_norm[source_list_machine]
-            topk_indexes_target_wo_norm = topk_indexes_wo_norm[~source_list_machine]
-            source_wo_norm = 0
-            print(f'len topk indexes source: {len(topk_indexes_source_wo_norm)}')
-            for id, ix in enumerate(topk_indexes_source_wo_norm):
-                ret_name = train_dataset.file_list[ix].split('/')[-1]
-                # print(ix, ret_name)
-                if 'source' in ret_name:
-                    source_wo_norm+=1
-            acc_source_wo_norm = source_wo_norm / len(topk_indexes_source_wo_norm)
-
-            target_wo_norm = 0
-            print(f'len topk indexes target: {len(topk_indexes_target_wo_norm)}')
-            for id, ix in enumerate(topk_indexes_target_wo_norm):
-                ret_name = train_dataset.file_list[ix].split('/')[-1]
-                # print(ix, ret_name)
-                if 'target' in ret_name:
-                    target_wo_norm+=1
-            acc_target_wo_norm = target_wo_norm / len(topk_indexes_target_wo_norm)
-            print(f'retrieval acc source: {acc_source_wo_norm}, target: {acc_target_wo_norm}')
-
         df_log = pd.concat([df_log, pd.DataFrame({
             'layer': [num_layer+1], 
             'machine': [class_name], 
@@ -778,33 +580,12 @@ for class_name in machine_names:
         )
         df_log.to_csv(f'{save_dir}/result.csv', index=False)
 
-        df_log_wo_norm = pd.concat([df_log_wo_norm, pd.DataFrame({
-            'layer': [num_layer+1], 
-            'machine': [class_name], 
-            'auc_source': [auc_source_wo_norm],
-            'auc_target': [auc_target_wo_norm],
-            'pauc': [pauc_all_wo_norm], 
-            'official_score': [official_score_wo_norm],
-            'auc': [auc_all_wo_norm], 
-            'pauc_source': [pauc_source_wo_norm],
-            'pauc_target': [pauc_target_wo_norm],
-            'acc_source': [acc_source_wo_norm],
-            'acc_target': [acc_target_wo_norm],
-            'f1': [f1_all_wo_norm],
-            'f1_source': [f1_source_wo_norm],
-            'f1_target': [f1_target_wo_norm],
-            })]
-        )
-        df_log_wo_norm.to_csv(f'{save_dir}/result_wo_norm.csv', index=False)
-
-
         # ======== create challenge submission files ========
         # Save raw anomaly scores for Baseline late fusion.
         if save_official:
             sub_condition = (
                 f'team_Baseline_{model_name}_raw_pooling{pooling_feature}'
-                f'_topk{top_k}_ld{local_density}_ldk{ld_k}'
-                f'_ldref{ld_ref_mode}'
+                f'_topk{top_k}'
                 f'_input{input_type}'
                 f'_differentview{different_view}'
                 f'{fixed_residual_condition}'
@@ -824,10 +605,10 @@ for class_name in machine_names:
             if not os.path.exists(sub_path_mb):
                 os.makedirs(sub_path_mb)
             
-            results_an[num_layer+1] = [str(s) for s in scores_wo_norm]
+            results_an[num_layer+1] = [str(s) for s in scores]
             layer_score_path = os.path.join(
                 save_dir,
-                'anomaly_scores_wo_norm',
+                'anomaly_scores',
                 f'layer_{num_layer+1:02d}',
             )
             os.makedirs(layer_score_path, exist_ok=True)
@@ -846,15 +627,15 @@ for class_name in machine_names:
             if has_eval_labels:
                 precision, recall, thresholds = precision_recall_curve(
                     gt_list,
-                    scores_wo_norm,
+                    scores,
                 )
                 f1_scores = (2 * precision * recall) / (precision + recall + np.finfo(float).eps)
                 idx = np.argmax(f1_scores)
                 optimal_threshold = thresholds[idx]
                 # threshold = np.percentile(train_scores, q=90)
-                decisions = scores_wo_norm > optimal_threshold
+                decisions = scores > optimal_threshold
             else:
-                decisions = np.zeros_like(scores_wo_norm, dtype=bool)
+                decisions = np.zeros_like(scores, dtype=bool)
             results_dec[num_layer+1] = [str(int(s)) for s in decisions]
 
             if num_layer+1 == single_best_layer:
@@ -869,8 +650,8 @@ for class_name in machine_names:
                 results_dec_single.to_csv(sub_path_sb + '/decision_result_' + class_name + '_section_00' + '_test.csv',
                     encoding='utf-8', index=False, header=False)
                 
-            if has_eval_labels and official_score_wo_norm > best_score:
-                best_score = official_score_wo_norm
+            if has_eval_labels and official_score > best_score:
+                best_score = official_score
                 best_layer = num_layer+1
 
     if save_official and best_layer is not None:
@@ -895,7 +676,7 @@ for class_name in machine_names:
         results_dec_best.to_csv(sub_path_mb + '/decision_result_' + class_name + '_section_00' + '_test.csv',
             encoding='utf-8', index=False, header=False)
 
-# ======== Summary with eval z-score normalization (diagnostic only) ========
+# ======== Summary with raw kNN scores ========
 df_test = df_log.reset_index(drop=True)
 columns = df_test.columns
 df_avg = df_test.groupby('layer')[columns[2:]].agg(hmean)
@@ -929,68 +710,19 @@ if df_avg['official_score'].notna().any():
 
     if wandb_run is not None:
         wandb.log({
-            f'diagnostic_eval_zscore/final_layer_wise/{key}': float(value)
+            f'raw_knn/final_layer_wise/{key}': float(value)
             for key, value in final_best_layer_wise.iloc[0].items()
         })
         wandb.log({
-            'diagnostic_eval_zscore/df_avg':
+            'raw_knn/df_avg':
             wandb.Table(dataframe=df_avg.reset_index())
         })
         wandb.log({
-            'diagnostic_eval_zscore/best_each_machine':
+            'raw_knn/best_each_machine':
             wandb.Table(dataframe=best_each_machine.reset_index(drop=True))
         })
-else:
-    print('No binary eval labels; skip diagnostic metric summary.')
-    pd.DataFrame().to_csv(f'{save_dir}/machine_layer_wise.csv', index=False)
-    pd.DataFrame().to_csv(f'{save_dir}/final_best_layer_wise.csv', index=False)
-    pd.DataFrame().to_csv(f'{save_dir}/best_each_machine.csv', index=False)
-
-# ======== Summary with raw score, no eval z-score normalization ========
-df_test = df_log_wo_norm.reset_index(drop=True)
-columns = df_test.columns
-df_avg = df_test.groupby('layer')[columns[2:]].agg(hmean)
-df_avg['oc'] = df_avg[['auc_source', 'auc_target', 'pauc']].agg(hmean, axis=1) # just in case
-print(df_avg)
-
-df_log_wo_norm.to_csv(f'{save_dir}/result_wo_norm.csv', index=False)
-
-print(f"Save log to {save_dir}")
-df_avg.to_csv(f'{save_dir}/df_avg_wo_norm.csv', index=False)
-if df_avg['official_score'].notna().any():
-    print('SELECTED FINAL LAYER-WISE SCORE')
-    best_layer_wise = df_avg['oc'].argmax()+1 # index + 1 to get the layer
-    machine_layer_wise = df_test[df_test['layer'] == best_layer_wise][['machine', 'auc', 'pauc', 'auc_source', 'auc_target', 'official_score']]
-    print(machine_layer_wise)
-
-    print(f' All layer wise score:')
-    final_best_layer_wise = pd.DataFrame(df_avg.iloc[df_avg['official_score'].argmax()]).T
-    print(final_best_layer_wise)
-
-    print('DEV-SELECTIVE BEST EACH MACHINE (DIAGNOSTIC ONLY)')
-    best_each_machine = df_test.loc[df_test.groupby('machine')['official_score'].idxmax()]
-    print(best_each_machine)
-
-    # print(f'FINAL BEST SCORE')
-    # final_best_score = pd.DataFrame(best_each_machine[['auc_source', 'auc_target', 'pauc', 'official_score']].agg(hmean)).T
-    # print(final_best_score)
-
-    machine_layer_wise.to_csv(f'{save_dir}/machine_layer_wise_wo_norm.csv', index=False)
-    final_best_layer_wise.to_csv(f'{save_dir}/final_best_layer_wise_wo_norm.csv', index=False)
-    best_each_machine.to_csv(f'{save_dir}/best_each_machine_wo_norm.csv', index=False)
-    # final_best_score.to_csv(f'{save_dir}/final_best_score_wo_norm.csv', index=False)
-
-    if wandb_run is not None:
-        wandb.log({
-            f'baseline/final_layer_wise/{key}': float(value)
-            for key, value in final_best_layer_wise.iloc[0].items()
-        })
-        wandb.log({
-            'baseline/df_avg':
-            wandb.Table(dataframe=df_avg.reset_index())
-        })
         artifact = wandb.Artifact(
-            f'{wandb_run.name}-dcase2026-baseline-results',
+            f'{wandb_run.name}-dcase2026-raw-knn-results',
             type='result',
         )
         for filename in os.listdir(save_dir):
@@ -1000,8 +732,8 @@ if df_avg['official_score'].notna().any():
         wandb.finish()
 else:
     print('No binary eval labels; skip raw metric summary.')
-    pd.DataFrame().to_csv(f'{save_dir}/machine_layer_wise_wo_norm.csv', index=False)
-    pd.DataFrame().to_csv(f'{save_dir}/final_best_layer_wise_wo_norm.csv', index=False)
-    pd.DataFrame().to_csv(f'{save_dir}/best_each_machine_wo_norm.csv', index=False)
+    pd.DataFrame().to_csv(f'{save_dir}/machine_layer_wise.csv', index=False)
+    pd.DataFrame().to_csv(f'{save_dir}/final_best_layer_wise.csv', index=False)
+    pd.DataFrame().to_csv(f'{save_dir}/best_each_machine.csv', index=False)
 
 print(f"Done")

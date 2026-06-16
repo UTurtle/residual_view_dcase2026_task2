@@ -11,8 +11,6 @@ COMMON_ARGS=(
   --different_view fixed_residual_view
   --fixed_residual_alpha 0.5
   --top_k 1
-  --ld_k 16
-  --ld_ref_mode combined
   --temporal_pooling
   --n_mix_support 990
   --alpha 0.9

@@ -4,7 +4,7 @@ import torch
 import soundfile as sf
 from torch.utils.data import Dataset
 
-from src.datasets.clip_sampling import TRANSITION_CROP_POLICIES, transition_10s_sample
+from src.datasets.clip_sampling import fixed_10s_sample
 from src.residual_view.input_type import make_input_type
 
 
@@ -30,11 +30,8 @@ class AudioDataset(Dataset):
         self.domain = domain
         self.channel_index = channel_index
         self.input_types = input_types
-        if crop_policy not in TRANSITION_CROP_POLICIES:
-            raise ValueError(
-                f"Unknown crop_policy={crop_policy}. "
-                f"Expected one of {sorted(TRANSITION_CROP_POLICIES)}."
-            )
+        if crop_policy != "fixed10s":
+            raise ValueError("This reproduction package supports only fixed10s cropping.")
         self.crop_policy = crop_policy
         # Filter by machine name
         if self.machine_name is not None:
@@ -142,12 +139,7 @@ class AudioDataset(Dataset):
             )
 
         if self.audio_length is not None:
-            wave = transition_10s_sample(
-                wave,
-                audio_length=self.audio_length,
-                sample_rate=sr,
-                policy=self.crop_policy,
-            )
+            wave = fixed_10s_sample(wave, audio_length=self.audio_length)
         wave = torch.from_numpy(np.asarray(wave, dtype=np.float32))
 
         return {
