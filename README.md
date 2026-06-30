@@ -19,7 +19,7 @@ If you use conda follow:
 conda create -n residual_view python=3.11 -y
 conda activate residual_view
 
-python -m pip install -r requirements.txt
+"$CONDA_PREFIX/bin/python" -m pip install -r requirements.txt
 ```
 
 Prepare the following external files locally:
@@ -94,31 +94,17 @@ The code in this repository is released under the MIT License. External
 pretrained encoders, datasets, and upstream repositories are not vendored here
 and remain under their own licenses.
 
-## Acknowledgement
+## Acknowledgements
 
-This repository is a small modification on top of the GenRep-style frozen
-embedding and memory-bank pipeline. We thank the GenRep authors for the
-framework and implementation direction. Please also check and cite the original
-GenRep work:
+This repository builds on the GenRep-style frozen embedding and memory-bank
+pipeline. We thank the authors of
+[GenRepASD](https://github.com/Phuriches/GenRepASD) for the framework and
+implementation direction.
 
-```text
-https://github.com/Phuriches/GenRepASD
-```
+We also thank the authors of the upstream audio encoders used by these systems:
 
-```bibtex
-@inproceedings{saengthong2025deep,
-  title={Deep generic representations for domain-generalized anomalous sound detection},
-  author={Saengthong, Phurich and Shinozaki, Takahiro},
-  booktitle={ICASSP 2025-2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
-  pages={1--5},
-  year={2025},
-  organization={IEEE}
-}
+- [SSLAM](https://github.com/ta012/SSLAM/tree/main)
+- [BEATs](https://github.com/microsoft/unilm/tree/master/beats)
+- [DaSheng](https://github.com/XiaoMi/dasheng)
 
-@techreport{saengthong2025genrep,
-  author      = {Saengthong, Phurich and Shinozaki, Takahiro},
-  title       = {{GENREP} for first-shot unsupervised anomalous sound detection},
-  institution = {DCASE Challenge 2025 Technical Report},
-  year        = {2025}
-}
-```
+## Citation
