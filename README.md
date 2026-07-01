@@ -108,3 +108,13 @@ We also thank the authors of the upstream audio encoders used by these systems:
 - [DaSheng](https://github.com/XiaoMi/dasheng)
 
 ## Citation
+
+```
+@techreport{KimLUDO2026,
+    Author = "Kim, JeongSik and Sung, JongWoo and Bae, HyeonJun and Kim, BoRyeon and Lee, JiAn",
+    title = "Residual View and Prototype Selection for Noise-Aware Anomalous Sound Detection",
+    institution = "DCASE2026 Challenge",
+    year = "2026",
+    month = "June",
+}
+```
